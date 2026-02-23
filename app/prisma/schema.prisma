@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  BUYER
+  STAFF
+}
+
+enum AccountStatus {
+  ACTIVE
+  ON_HOLD
+}
+
+enum OrderStatus {
+  SUBMITTED
+  APPROVED
+  ALLOCATED
+  SHIPPED
+  PAID
+}
+
+enum AssetType {
+  IMAGE
+  PDF
+  ZIP
+  OTHER
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  role          UserRole @default(BUYER)
+  active        Boolean  @default(true)
+
+  accountId     String?
+  account       Account? @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  orders        Order[]  @relation("BuyerOrders")
+  resetTokens   PasswordResetToken[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([role])
+}
+
+model Account {
+  id             String        @id @default(cuid())
+  name           String
+  licenseNumber  String?
+  status         AccountStatus @default(ACTIVE)
+  paymentTerms   String?
+
+  buyers         User[]
+  orders         Order[]
+  priceOverrides PriceOverride[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+  @@unique([name])
+}
+
+model Brand {
+  id        String   @id @default(cuid())
+  name      String   @unique
+
+  products  Product[]
+  assets    Asset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  sku           String   @unique
+  name          String
+  category      String?
+  description   String?
+  casePackSize  Int
+  active        Boolean  @default(true)
+
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id], onDelete: Restrict)
+
+  priceOverrides PriceOverride[]
+  orderItems     OrderItem[]
+  assets         Asset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([brandId])
+  @@index([active])
+  @@index([category])
+}
+
+model PriceOverride {
+  id             String   @id @default(cuid())
+  accountId      String
+  productId      String
+  casePriceCents Int
+
+  account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([accountId, productId])
+  @@index([productId])
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  accountId     String
+  buyerUserId   String
+  status        OrderStatus @default(SUBMITTED)
+
+  internalNotes String?
+
+  submittedAt   DateTime?
+  approvedAt    DateTime?
+  allocatedAt   DateTime?
+  shippedAt     DateTime?
+  paidAt        DateTime?
+
+  account       Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  buyer         User    @relation("BuyerOrders", fields: [buyerUserId], references: [id], onDelete: Restrict)
+  items         OrderItem[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([buyerUserId])
+  @@index([status])
+  @@index([shippedAt])
+}
+
+model OrderItem {
+  id                     String  @id @default(cuid())
+  orderId                String
+  productId              String
+  caseQty                Int
+  casePriceCentsSnapshot Int
+
+  order                  Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product                Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Asset {
+  id          String    @id @default(cuid())
+  type        AssetType @default(OTHER)
+  filename    String
+  storageKey  String    @unique
+  contentType String?
+  sizeBytes   Int?
+
+  brandId     String?
+  productId   String?
+
+  brand       Brand?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  product     Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([brandId])
+  @@index([productId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
