@@ -1,5 +1,12 @@
-import { prisma } from "../db/prisma";
-import { hashPassword } from "../auth/passwords";
+import { PrismaClient } from "@prisma/client";
+import { hash } from "@node-rs/argon2";
+
+const prisma = new PrismaClient();
+
+async function hashPassword(plain: string) {
+  if (plain.length < 12) throw new Error("Password must be at least 12 characters.");
+  return hash(plain, { memoryCost: 19456, timeCost: 2, parallelism: 1 });
+}
 
 async function main() {
   const staffPass = await hashPassword("ChangeMeNow_Staff_1234");
